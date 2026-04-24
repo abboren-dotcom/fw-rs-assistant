@@ -1,26 +1,164 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: 250 250 252;
+  --foreground: 30 35 48;
+  --primary: 42 90 165;
+  --primary-light: 234 241 253;
+  --secondary: 243 244 246;
+  --border: 226 228 233;
+  --muted: 107 114 128;
+  --accent: 42 90 165;
+  --destructive: 220 38 38;
+  --success: 22 163 74;
+  --warning: 202 138 4;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-background: rgb(var(--background));
+  --color-foreground: rgb(var(--foreground));
+  --color-primary: rgb(var(--primary));
+  --color-primary-light: rgb(var(--primary-light));
+  --color-secondary: rgb(var(--secondary));
+  --color-border: rgb(var(--border));
+  --color-muted: rgb(var(--muted));
+  --color-accent: rgb(var(--accent));
+  --color-destructive: rgb(var(--destructive));
+  --color-success: rgb(var(--success));
+  --color-warning: rgb(var(--warning));
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: 14 17 24;
+    --foreground: 220 225 235;
+    --primary: 99 149 225;
+    --primary-light: 20 35 65;
+    --secondary: 24 28 38;
+    --border: 40 47 62;
+    --muted: 120 130 150;
+    --accent: 99 149 225;
+    --destructive: 239 68 68;
+    --success: 74 222 128;
+    --warning: 250 204 21;
   }
 }
 
+* {
+  box-sizing: border-box;
+  border-color: rgb(var(--border));
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: rgb(var(--background));
+  color: rgb(var(--foreground));
+  font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Tabular numerals for tables */
+table,
+.tabnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Thin scrollbars */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgb(var(--border));
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--muted));
+}
+
+/* Focus visible ring */
+:focus-visible {
+  outline: 2px solid rgb(var(--primary));
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* Sidebar */
+.sidebar {
+  background: rgb(16 21 32);
+  border-right: 1px solid rgb(30 38 52);
+  color: rgb(180 190 210);
+  width: 240px;
+  min-height: 100vh;
+  flex-shrink: 0;
+}
+
+.dark .sidebar {
+  background: rgb(10 13 20);
+  border-right-color: rgb(24 32 46);
+}
+
+/* Confidence badge colors */
+.badge-high {
+  background: rgb(220 252 231);
+  color: rgb(21 128 61);
+  border: 1px solid rgb(187 247 208);
+}
+.badge-medium {
+  background: rgb(254 249 195);
+  color: rgb(133 77 14);
+  border: 1px solid rgb(253 230 138);
+}
+.badge-low {
+  background: rgb(254 226 226);
+  color: rgb(185 28 28);
+  border: 1px solid rgb(252 165 165);
+}
+.badge-parsed {
+  background: rgb(219 234 254);
+  color: rgb(29 78 216);
+  border: 1px solid rgb(191 219 254);
+}
+.badge-inferred {
+  background: rgb(237 233 254);
+  color: rgb(109 40 217);
+  border: 1px solid rgb(221 214 254);
+}
+.badge-manual {
+  background: rgb(var(--secondary));
+  color: rgb(var(--muted));
+  border: 1px solid rgb(var(--border));
+}
+
+@media (prefers-color-scheme: dark) {
+  .badge-high {
+    background: rgb(20 83 45 / 0.4);
+    color: rgb(134 239 172);
+    border-color: rgb(22 101 52 / 0.5);
+  }
+  .badge-medium {
+    background: rgb(113 63 18 / 0.4);
+    color: rgb(253 224 71);
+    border-color: rgb(133 77 14 / 0.5);
+  }
+  .badge-low {
+    background: rgb(127 29 29 / 0.4);
+    color: rgb(252 165 165);
+    border-color: rgb(153 27 27 / 0.5);
+  }
+  .badge-parsed {
+    background: rgb(30 64 175 / 0.3);
+    color: rgb(147 197 253);
+    border-color: rgb(29 78 216 / 0.4);
+  }
+  .badge-inferred {
+    background: rgb(76 29 149 / 0.3);
+    color: rgb(196 181 253);
+    border-color: rgb(109 40 217 / 0.4);
+  }
 }
