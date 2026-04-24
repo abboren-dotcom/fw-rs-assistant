@@ -14,6 +14,7 @@ import {
   parseFsMetaPopupLists,
   parseFsGroups,
   parseFsTextImportFormat,
+  parseMetaDataSchema,
 } from "./fotostation-parser";
 
 // FotoStation app-config filenames — not metadata-relevant, skip gracefully
@@ -149,7 +150,11 @@ export function parseUploadedFiles(files: UploadedFile[]): ParseResult {
         detectedType === "display_template" ||
         detectedType === "text_template"
       ) {
-        const { template, fields } = parseMetadataTemplate(artifact, content);
+        // FotoWare MetadataConfiguration.xml uses a distinct <MetaDataSchema> root
+        const isMdsFormat = /<MetaDataSchema\b/i.test(content);
+        const { template, fields } = isMdsFormat
+          ? parseMetaDataSchema(artifact, content)
+          : parseMetadataTemplate(artifact, content);
 
         fields.forEach((f) => {
           f.templateId = template.id;

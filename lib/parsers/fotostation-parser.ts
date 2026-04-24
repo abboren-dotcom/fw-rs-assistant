@@ -323,3 +323,185 @@ export function parseFsTextImportFormat(artifact: SourceArtifact, content: strin
 function slugify(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
 }
+
+// ── MetadataConfiguration.xml parser ─────────────────────────────────────
+// FotoWare (not FotoStation) uses a <MetaDataSchema> root element with
+// <Fields> and <Groups> children. Each field carries XMP namespace + name.
+//
+// Example:
+//   <Field fieldType="Single" guiLabel="Fotograf/Photographer" id="80"
+//          isMultiline="false" name="creator" ns="dc" valueType="Text"/>
+//   <Field fieldType="BagOfStruct" guiLabel="Location Shown" id="391"
+//          name="LocationShown" ns="Iptc4xmpExt">
+//     <StructField displayName="City" name="City" .../>
+//   </Field>
+
+// FotoWare namespace alias → canonical XMP prefix
+const FW_NS_ALIAS: Record<string, string> = {
+  dc:           "XMP-dc",
+  photoshop:    "XMP-photoshop",
+  Iptc4xmpCore: "XMP-iptcCore",
+  Iptc4xmpExt:  "XMP-iptcExt",
+  xmpRights:    "XMP-xmpRights",
+  xmp:          "XMP-xmp",
+  xmpMM:        "XMP-xmpMM",
+  tiff:         "XMP-tiff",
+  exif:         "XMP-exif",
+  aux:          "XMP-aux",
+  crs:          "XMP-crs",
+  fwl:          "XMP-fwl",  // FotoWare Legacy (IPTC-compatible)
+  fwc:          "XMP-fwc",  // FotoWare Custom
+  fwr:          "XMP-fwr",  // FotoWare Reserved
+  fwu:          "XMP-fwu",  // FotoWare User Defined
+  cc:           "XMP-cc",
+  plus:         "XMP-plus",
+  DICOM:        "XMP-DICOM",
+  dcterms:      "XMP-dcterms",
+  skyview:      "XMP-skyview",
+};
+
+// Labels that indicate a field is a generic placeholder (low value for mapping)
+const GENERIC_LABEL_RE = /^User defined \d+$/i;
+
+function inferMdsFieldType(
+  fieldType: string | undefined,
+  valueType: string | undefined,
+  isMultiline: boolean,
+  label: string,
+): FWFieldType {
+  if (valueType === "Date") return "date";
+  if (valueType === "Boolean") return "boolean";
+  if (valueType === "Integer" || valueType === "Real") return "number";
+  if (fieldType === "Bag" || fieldType === "Seq") {
+    const l = label.toLowerCase();
+    if (l.includes("keyword") || l.includes("subject") || l.includes("tag")) return "keyword";
+    return "multiselect";
+  }
+  if (fieldType === "BagOfStruct" || fieldType === "SeqOfStruct") return "text"; // flattened
+  if (isMultiline) return "longtext";
+  if (fieldType === "AltLang") return isMultiline ? "longtext" : "text";
+  return "text";
+}
+
+export function parseMetaDataSchema(artifact: SourceArtifact, content: string): FsGroupParseResult {
+  const fields: ParsedField[] = [];
+  const sections: ParsedEditorSection[] = [];
+
+  // Map ns:name → ParsedField (for resolving Group members)
+  const fieldByNsName = new Map<string, ParsedField>();
+
+  // Match both self-closing and block <Field> elements.
+  // Group 1 = attribute string; group 2 = inner content (undefined for self-closing)
+  const fieldRe = /<Field\b([^>]*?)(?:\/>|>([\s\S]*?)<\/Field>)/gi;
+  let fm: RegExpExecArray | null;
+
+  while ((fm = fieldRe.exec(content)) !== null) {
+    const attrs = fm[1];
+    const inner = fm[2];
+
+    const id      = attrs.match(/\bid\s*=\s*["']?(\d+)["']?/i)?.[1];
+    const guiLabel = attrs.match(/guiLabel\s*=\s*["']([^"']+)["']/i)?.[1];
+    const name    = attrs.match(/\bname\s*=\s*["']([^"']+)["']/i)?.[1];
+    const ns      = attrs.match(/\bns\s*=\s*["']([^"']+)["']/i)?.[1];
+    const fieldType = attrs.match(/fieldType\s*=\s*["']([^"']+)["']/i)?.[1];
+    const valueType = attrs.match(/valueType\s*=\s*["']([^"']+)["']/i)?.[1];
+    const isMultiline = /isMultiline\s*=\s*["']true["']/i.test(attrs);
+    const coreName  = attrs.match(/coreName\s*=\s*["']([^"']+)["']/i)?.[1];
+    const adobeName = attrs.match(/adobeName\s*=\s*["']([^"']+)["']/i)?.[1];
+
+    if (!id || !guiLabel || !name) continue;
+    // Skip purely generic placeholder labels
+    if (GENERIC_LABEL_RE.test(guiLabel)) continue;
+
+    const xmpPrefix = ns ? (FW_NS_ALIAS[ns] ?? `XMP-${ns}`) : "XMP";
+    const fwType = inferMdsFieldType(fieldType, valueType, isMultiline, guiLabel);
+    const fieldId = nanoid("fld");
+    const code = `${ns ?? "fw"}_${name}`;
+
+    const altLabels: string[] = [];
+    if (coreName) altLabels.push(coreName);
+    if (adobeName) altLabels.push(adobeName);
+
+    // For struct fields collect sub-field display names as a note
+    const structNote = inner
+      ? (() => {
+          const subNames: string[] = [];
+          const subRe = /displayName\s*=\s*["']([^"']+)["']/gi;
+          let sm: RegExpExecArray | null;
+          while ((sm = subRe.exec(inner)) !== null) subNames.push(sm[1]);
+          return subNames.length ? `Sub-fields: ${subNames.join(", ")}` : null;
+        })()
+      : null;
+
+    const notes: string[] = [
+      `FotoWare field id=${id}, ${xmpPrefix}:${name}`,
+      ...(structNote ? [structNote] : []),
+    ];
+
+    const parsedField: ParsedField = {
+      id: fieldId,
+      sourceArtifactId: artifact.id,
+      code,
+      label: guiLabel,
+      altLabels,
+      fwFieldType: fwType,
+      required: false,
+      readOnly: false,
+      multiValue: fwType === "keyword" || fwType === "multiselect" || fieldType === "Bag" || fieldType === "Seq" || fieldType === "BagOfStruct" || fieldType === "SeqOfStruct",
+      exampleValues: [],
+      appearsInEditor: true,
+      appearsInDisplay: false,
+      sortOrder: fields.length,
+      confidence: (ns === "fwu" || ns === "fwr") ? "medium" : "high",
+      evidence: "parsed",
+      notes,
+      rawSnippet: attrs.slice(0, 200),
+    };
+
+    fields.push(parsedField);
+    if (ns) fieldByNsName.set(`${ns}:${name}`, parsedField);
+  }
+
+  // ── Parse <Groups> into editor sections ──────────────────────────────────
+  const groupRe = /<Group\s+name\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/Group>/gi;
+  let gm: RegExpExecArray | null;
+  let sectionSort = 0;
+
+  while ((gm = groupRe.exec(content)) !== null) {
+    const groupName = gm[1];
+    const groupInner = gm[2];
+    const sectionId = nanoid("sec");
+    const sectionFieldIds: string[] = [];
+
+    const memberRe = /<Member\s+field\s*=\s*["']([^"']+)["']\s+ns\s*=\s*["']([^"']+)["'][^>]*\/?>/gi;
+    let mm: RegExpExecArray | null;
+
+    while ((mm = memberRe.exec(groupInner)) !== null) {
+      const f = fieldByNsName.get(`${mm[2]}:${mm[1]}`);
+      if (f && !sectionFieldIds.includes(f.id)) sectionFieldIds.push(f.id);
+    }
+
+    if (sectionFieldIds.length > 0) {
+      sections.push({
+        id: sectionId,
+        label: groupName,
+        fieldIds: sectionFieldIds,
+        collapsed: false,
+        sortOrder: sectionSort++,
+      });
+    }
+  }
+
+  const template: ParsedTemplate = {
+    id: nanoid("tpl"),
+    sourceArtifactId: artifact.id,
+    name: "FotoWare Metadata Configuration",
+    kind: "metadata",
+    fieldIds: fields.map((f) => f.id),
+    sections,
+    confidence: fields.length > 0 ? "high" : "low",
+    notes: fields.length === 0 ? ["No fields found in MetaDataSchema"] : [],
+  };
+
+  return { template, fields };
+}

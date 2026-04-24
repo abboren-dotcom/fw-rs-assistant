@@ -18,6 +18,8 @@ const FS_METADATA_FILES = new Set([
   "fsmetaeditor.xml",
   "fsmeta.xml",
   "fsmetaformat.xml",
+  // FotoWare (not FotoStation) metadata schema
+  "metadataconfiguration.xml",
 ]);
 
 // Files that define display/view panels
@@ -137,7 +139,7 @@ function detectFromXmlContent(rawContent: string): ArtifactType {
   // FotoStation-specific root elements
   if (c.includes("<fsmetapopuplists") || c.includes("<popuplist") || c.includes("<fspopuplists")) return "quick_list";
   if (c.includes("<fsgroups") || c.includes("<fieldgroup") || c.includes("<metadatagroup")) return "editor_config";
-  if (c.includes("<fsmetadata") || c.includes("<fieldset") || c.includes("<metadatafield")) return "metadata_template";
+  if (c.includes("<metadataschema") || c.includes("<fsmetadata") || c.includes("<fieldset") || c.includes("<metadatafield")) return "metadata_template";
 
   // Generic patterns
   if (c.includes("<quicklist") || c.includes("<vocabulary") || c.includes("<picklist")) return "quick_list";
